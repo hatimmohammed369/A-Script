@@ -1,0 +1,6 @@
+testing
+!testing/*.py
+.vscode
+__pycache__
+p
+tags

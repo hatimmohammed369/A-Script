@@ -1,0 +1,66 @@
+# *      =>  0 or more
+# +      =>  1 or more
+# [xyz]  =>  xyz is optional
+# () are used for grouping
+# anything between '' is denotes just itself, so '(' denotes an actual ( written in code
+
+KEYWORDS: 'define' | 'var' | 'const' | 'int' | 'float' | 'string' | 'char' | 'bool' | 'not' | 'and' | 'or' | 'true' | 'false' |
+    'array' | 'ref_of' | 'function' | 'return' | 'if' | 'else' | 'else_if' | 'for' | 'while' | 'break' | 'continue' | 'pass'
+
+STATEMENT: ( SIMPLE_STATEMENT | COMPOUND_STATEMENT ) [ [';'] LINE_BREAK | ';' ]
+
+SIMPLE_STATEMENT: 'pass' | 'break' | 'continue' | RETURN_STATEMENT | OPERATOR_EXPRESSION | STRUCT_EXPRESSION | STRUCT_MEMBERSHIP_ACCESS
+
+RETURN_STATEMENT: 'return' EXPRESSION
+
+EXPRESSION: SIMPLE_EXPRESSION | COMPOUND_EXPRESSION
+
+SIMPLE_EXPRESSION: NAME | LITERAL
+
+COMPOUND_EXPRESSION: FUNCTION_CALL | CONST_VAR_DEFINITION | ARRAY_SUBSCRIPTION | OPERATOR_EXPRESSION | STRUCT_DEFINITION
+
+ARRAY_SUBSCRIPTION: NAME '[' NON_NEGATIVE_INTEGER ']'
+
+LITERAL: NUMBER | STRING
+
+FUNCTION_CALL: NAME '(' [ EXPRESSIONS_LIST ] ')'
+
+EXPRESSIONS_LIST: EXPRESSION ( ',' EXPRESSION )*
+
+OPERATOR_EXPRESSION: UNARY_OPERATOR SIMPLE_EXPRESSION | SIMPLE_EXPRESSION ( BINARY_OPERATOR SIMPLE_EXPRESSION )+
+
+UNARY_OPERATOR: '-' | '++' | '--' | '~'
+
+BINARY_OPERATOR: '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not' | 'and' | 'or' | '+' | '-' | '*' | '/' ':=' | '=' | '+=' | '-=' | '*=' | '/=' | '~=' | '&=' | '|=' | '^=' | '>>=' | '<<='
+
+CONST_VAR_DEFINITION: 'define' (NAME ':' TYPE ':=' EXPRESSION)+
+
+TYPE: [ 'const' | 'var' ] ( USER_DEFINED_TYPE | PRIMITIVE_DATA_TYPE ) [ '&' ]
+
+PRIMITIVE_DATA_TYPE: 'int' | 'float' | 'string' | 'char' | 'bool' | ARRAY_TYPE
+
+ARRAY_TYPE: 'array' [ '(' TYPE ( ',' NON_NEGATIVE_INTEGER )+ ')' ]
+
+COMPOUND_STATEMENT: FUNCTION_STATEMENT | IF_STATEMENT | FOR_STATEMENT | WHILE_STATEMENT
+
+FUNCTION_STATEMENT: 'function' NAME '(' PARAMETERS_LIST ')' [ ':' TYPE ] BLOCK END_STATEMENT
+
+PARAMETERS_LIST: PARAMETER ( ',' PARAMETER )*
+
+PARAMETER: NAME ':' TYPE
+
+STRUCT_EXPRESSION: NAME '{' ( NAME ':' EXPRESSION )* '}'
+
+STRUCT_MEMBERSHIP_ACCESS: NAME '.' NAME
+
+BLOCK: INDENT STATEMENT+ OUTDENT
+
+END_STATEMENT: 'end' [ STRING ]
+
+IF_STATEMENT: 'if' EXPRESSION BLOCK [ 'else_if' BLOCK ] [ 'else' BLOCK ] END_STATEMENT
+
+FOR_STATEMENT: 'for' NAME 'in' ARRAY_EXPRESSION BLOCK END_STATEMENT
+
+WHILE_STATEMENT: 'while' EXPRESSION BLOCK END_STATEMENT
+
+STRUCT_DEFINITION: 'struct' NAME NEW_LINE INDENT (NAME ':' TYPE NEW_LINE) OUTDENT END_STATEMENT
