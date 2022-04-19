@@ -338,10 +338,12 @@ class Lexer:
 
     def generate_tokens(self):
         useless_white_space_pattern = re.compile(pattern = r"(?!\n)\s")
+        last_line = 0
         if not self.done:
-            while True:
+            while True: # Iterate lines
                 self.current_line_obj = self.lines.get(self.ln, None)
                 if not self.current_line_obj:
+                    last_line = 0 if self.ln == 0 else self.ln - 1
                     break
                 line_value = self.current_line_obj.value
                 if not (
@@ -354,7 +356,7 @@ class Lexer:
                 tok = None
                 if len(line_value) != 0:
                     indentation = False
-                    while True:
+                    while True: # Generate all tokens in current line
                         if (
                             self.col == 0 and
                             re.fullmatch(
@@ -395,12 +397,24 @@ class Lexer:
                                         self.tokens.append(tok)
                                         if tok.value == "\n" or tok.name == "MULTI_LINED_STRING":
                                             break
+                    # end "while True" generate all tokens in current line
                 # Done processing
                 if not tok or tok.value == "\n":
                     self.ln += 1
                 else:
                     self.col = tok.end_col + 1
                     self.ln  = tok.end_ln
+            # end "while True" Iterate all lines
+
+            EOF = Token(
+                name  = "EOF",
+                value = "",
+            )
+            EOF.begin_idx = EOF.end_idx = len(self.text)
+            EOF.begin_col = EOF.end_col = last_line
+            EOF.begin_ln  = EOF.end_ln  = max(0, self.ln - 1)
+            self.tokens.append(EOF)
+
             self.done = True
         return self
 
