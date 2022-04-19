@@ -116,7 +116,7 @@ class Lexer:
         # INDENTATION
         if self.col == 0 and not self.left_parenthesis_stack and not self.checked_indent:
             self.checked_indent = True
-            captured_indent_match = re.match(pattern = r"\s*", string = current_line)
+            captured_indent_match = re.match(pattern = r"[ \t]*", string = current_line)
             captured_indent = captured_indent_match.group()
 
             if (" " in captured_indent and self.indent_name == "tab") or ("\t" in captured_indent and self.indent_name == "space"):
