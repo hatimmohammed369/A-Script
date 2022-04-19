@@ -4,7 +4,7 @@
 # () are used for grouping
 # anything between '' is denotes just itself, so '(' denotes an actual ( written in code
 
-KEYWORDS: 'define' | 'var' | 'const' | 'int' | 'float' | 'string' | 'char' | 'bool' | 'not' | 'and' | 'or' | 'true' | 'false' |
+KEYWORDS: 'define' | 'mut' | 'const' | 'int' | 'float' | 'string' | 'char' | 'bool' | 'not' | 'and' | 'or' | 'true' | 'false' |
     'array' | 'ref_of' | 'function' | 'return' | 'if' | 'else' | 'else_if' | 'for' | 'while' | 'break' | 'continue' | 'pass'
 
 STATEMENT: ( SIMPLE_STATEMENT | COMPOUND_STATEMENT ) [ [';'] LINE_BREAK | ';' ]
@@ -35,7 +35,7 @@ BINARY_OPERATOR: '==' | '!=' | '<' | '<=' | '>' | '>=' | 'not' | 'and' | 'or' | 
 
 CONST_VAR_DEFINITION: 'define' (NAME ':' TYPE ':=' EXPRESSION)+
 
-TYPE: [ 'const' | 'var' ] ( USER_DEFINED_TYPE | PRIMITIVE_DATA_TYPE ) [ '&' ]
+TYPE: [ 'const' | 'mut' ] ( USER_DEFINED_TYPE | PRIMITIVE_DATA_TYPE ) [ '&' ]
 
 PRIMITIVE_DATA_TYPE: 'int' | 'float' | 'string' | 'char' | 'bool' | ARRAY_TYPE
 

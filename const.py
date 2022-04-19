@@ -7,7 +7,7 @@ import re
 
 KEYWORDS = (
     "define",
-    "var",
+    "mut",
     "const",
     "int",
     "float",
@@ -63,7 +63,7 @@ SORTED_KEYWORDS = (
     'string',
     "struct",
     'true',
-    'var',
+    'mut',
     'while'
 )
 

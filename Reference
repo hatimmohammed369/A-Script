@@ -33,19 +33,20 @@ Variables and Constants:
 define variable_name: type [ := value [ ; ] ]
 define const_name: type [ := value [ ; ] ]
 
-type: (var) or (const) not both, then a primitive or user-defined type, and then the optional & reference indicator
+type: either one of: nothing, which means immutable, or (mut), muttable, or (const)
+    then a primitive or user-defined type, and then the optional & reference indicator
 
 <#####################################################################################################>
 
 So we can do these things:
-define x: var int := 123;
+define x: mut int := 123;
 define y: const string := "Hello world!";
 define xyz: const float := 123.e+234
-define _zyfe19334: var float := -0.3892 + 32.0 * 3344;
-define x: var array(int,10) := [0, 1, 2, 3, 4, 5, 6, 8, 9]
+define _zyfe19334: mut float := -0.3892 + 32.0 * 3344;
+define x: mut array(int,10) := [0, 1, 2, 3, 4, 5, 6, 8, 9]
 define tree: const array(string,2) := ["branch 0", "branch 1"];
 define right: const bool = true;
-define go: var bool = false
+define go: mut bool = false
 
 And as usual, this is how you index arrays:
 define x: const [string;4] = ['false', 'False', 'True', 'true']
@@ -55,8 +56,8 @@ And so on
 
 Reference:
 Pointer to an actual variable/constant, mutating reference mutates the pointed variable/constant
-define x: var int = -13;
-define x_ref: var int& = ref_of x
+define x: mut int = -13;
+define x_ref: mut int& = ref_of x
 x_ref = 123; # now (x) will also take value 123
 
 <#####################################################################################################>
@@ -76,7 +77,7 @@ This &var0 notations is for (references), which are simply actual variables not 
 So things like this are NOT allowed:
 read(7);
 But this is allowed:
-var x: int = 0
+define x: int = 0
 read(&x)
 
 <#####################################################################################################>
@@ -171,5 +172,14 @@ struct color
     blue  : int
 end "color"
 
-define c: var color = color {red : 90, green: 102, blue: 234}
+define c: mut color = color {red : 90, green: 102, blue: 234}
 c.red = 1;
+
+<#####################################################################################################>
+
+Constants
+Immutable with known value at Runtime
+define x: const int := 2344;
+
+Not Allowed
+define x: const int := compute();
