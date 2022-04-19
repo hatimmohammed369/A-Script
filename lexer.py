@@ -329,7 +329,10 @@ class Lexer:
 
         if not error:
             if tok:
-                self.advance(steps = len(tok.value))
+                if tok.name != "MULTI_LINED_STRING":
+                    # using self.advance when encountering MULTI_LINED_STRING is dangerous
+                    # since self.col becomes invalid after call to self.advance
+                    self.advance(steps = len(tok.value))
         return error, tok
 
 
