@@ -315,7 +315,13 @@ class Lexer:
                 begin_ln  = self.ln,
             )
 
-            if multi_lined_string := MULTI_LINED_STRING_PATTERN.match(string = self.text, pos = self.idx):
+            if single_lined_string := SINGLE_LINED_STRING_PATTERN.match(string = current_line, pos = self.col):
+                # SINGLE LINE STRING
+                tok.name    = "STRING"
+                tok.value   = single_lined_string.group()
+                tok.end_col = tok.begin_col + len(tok.value)
+                tok.end_ln  = tok.begin_ln
+            elif multi_lined_string := MULTI_LINED_STRING_PATTERN.match(string = self.text, pos = self.idx):
                 # MULTI LINED STRING
                 tok.name  = "MULTI_LINED_STRING"
                 tok.value = multi_lined_string.group()
@@ -326,12 +332,6 @@ class Lexer:
                     else:
                         tok.end_col += 1
                 tok.end_ln = tok.begin_ln + tok.value.count("\n")
-            elif single_lined_string := SINGLE_LINED_STRING_PATTERN.match(string = current_line, pos = self.col):
-                # SINGLE LINE STRING
-                tok.name    = "STRING"
-                tok.value   = single_lined_string.group()
-                tok.end_col = tok.begin_col + len(tok.value)
-                tok.end_ln  = tok.begin_ln
             else:
                 # Un-terminated string
                 first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).start()
