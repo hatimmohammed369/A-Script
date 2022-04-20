@@ -15,7 +15,8 @@ from sys import stderr
 @dataclass(init=True, repr=True)
 class Line:
     value: str = "" # Actual text excluding \n (line breaks)
-    begin: int = 0 # nearest line break when searching backwards
+    begin: int = 0 # index of first character in line
+    # it can be that begin == end, in such case the line empty, it's "\n"
     end: int = 0 # nearest line break when searching forwards
 
 
@@ -47,11 +48,6 @@ class Lexer:
         self,
         file_name:str,
         text: str,  # Text to be tokenized
-        indent_type=" ",  # which character to use for indentation,
-        # if indent_type.lower() == "s" then we use spaces for indentation
-        # if indent_type.lower() == "t" then we use tabs for indentation
-        indent_size=4,  # How many indent characters in a single indent token
-        supplied_spaces_explicitly=False,  # Did you supply --spaces explicitly?
     ):
         self.file = file_name
         self.text: str = text
@@ -62,7 +58,7 @@ class Lexer:
 
         self.tokens: list[Token] = []
 
-        self.indents_stack = []  # how many indents currently
+        self.indents_stack: List[int] = []  # how many indents currently
         self.indents_tokens_stack: List[Token] = []
         self.checked_indent_in_current_line = False
 
@@ -78,23 +74,11 @@ class Lexer:
 
         self.current_line_obj = self.lines.get(0, None)
 
-        self.indent_type: str = indent_type.lower()
-        if self.indent_type not in (" ", "\t"):
-            raise ValueError(f'{self.indent_type = } must be either " " or "\\t"')
-
-        self.indent_size = indent_size
-
         # becomes True after this instance successfully executes tokenize()
         self.done = False
 
-        self.supplied_spaces_explicitly = supplied_spaces_explicitly
-
         # Store left parentheses "( or [" tokens to enable multi-line statements
         self.left_parenthesis_stack: List[Token] = []
-
-        self.indent_name = "space" if self.indent_type == " " else "tab"
-
-        self.indent_char = "+" if self.indent_name == "space" else "*"
 
 
     def pos(self) -> str:
@@ -128,52 +112,28 @@ class Lexer:
             # so it's always guaranteed we have at least one non-white-space in current line
             first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).group()
             if first_non_white_space not in ("#", ")", "}", "]"):
-                if (
-                    (" " in captured_indent and self.indent_name == "tab") or
-                    "\t" in captured_indent and self.indent_name == "space"
-                ):
-                    # Mixing tabs an spaces
-                    error += f"Indentation Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
-                    error += " " * 4 + "Mixing tabs and spaces in indentation\n"
-                    error += f"{self.ln + 1} | " + "".join("*" if c == "\t" else "+" for c in captured_indent)
-                    error += current_line[len(captured_indent) : ]
-                    error += " " * len(f"{self.ln + 1} | ")
-                    illegar_chars = 0
-                    for c in captured_indent:
-                        if c != self.indent_type:
-                            illegar_chars += 1
-                            error += "^"
-                        else:
-                            error += " "
-                    error += "\n"
-                    error += " " * len(f"{self.ln + 1} | ") + f"Found {'one' if illegar_chars == 1 else illegar_chars} "
-                    error += f"{'tab' if self.indent_name == 'space' else 'space'}{'s' if illegar_chars > 1 else ''}\n\n"
-                    error += "In every indent in this file, remove ALL "
-                    error += f"{'TAB' if self.indent_name == 'space' else 'SPACE'}S"
+                current_indent = 0 if not self.indents_stack else self.indents_stack[-1]
+                tok = Token(
+                    value     = captured_indent,
+                    begin_idx = self.idx,
+                    begin_col = self.col,
+                    begin_ln  = self.ln,
+                    end_ln    = self.ln
+                )
+                if len(captured_indent) < current_indent:
+                    # OUTDENT
+                    tok.name = "OUTDENT"
+                    self.indents_stack.pop(-1)
+                elif current_indent < len(captured_indent):
+                    # INDENT
+                    tok.name = "INDENT"
+                    self.indents_stack.append(len(tok.value))
+                else:
+                    # No INDENT/DEDEN, just advance
+                    tok = None
 
-                if not error:
-                    current_indent = 0 if not self.indents_stack else self.indents_stack[-1]
-                    tok = Token(
-                        value     = captured_indent,
-                        begin_idx = self.idx,
-                        begin_col = self.col,
-                        begin_ln  = self.ln,
-                        end_ln    = self.ln
-                    )
-                    if len(captured_indent) < current_indent:
-                        # OUTDENT
-                        tok.name = "OUTDENT"
-                        self.indents_stack.pop(-1)
-                    elif current_indent < len(captured_indent):
-                        # INDENT
-                        tok.name = "INDENT"
-                        self.indents_stack.append(len(tok.value))
-                    else:
-                        # No INDENT/DEDEN, just advance
-                        tok = None
-
-                    if tok:
-                        self.indents_tokens_stack.append(tok)
+                if tok:
+                    self.indents_tokens_stack.append(tok)
             # end "if first_non_white_space not in ("#", ")", "}", "]")"
             steps = len(captured_indent)
 
@@ -467,11 +427,11 @@ class Lexer:
                 error += " " * 4 + f"Un-closed {last_left.value}\n"
                 error_line_indent = re.match(pattern = r"[ \t]*", string = error_line).group()
 
-                error += f"{last_left.begin_ln + 1} | " + "..." * int(len(error_line_indent) > self.indent_size)
-                error += (" " * self.indent_size) * int(bool(error_line_indent)) + error_line.strip() + "\n"
+                error += f"{last_left.begin_ln + 1} | " + "..." * int(len(error_line_indent) > 4)
+                error += (" " * 4) * int(bool(error_line_indent)) + error_line.strip() + "\n"
                 error += " " * len(f"{last_left.begin_ln + 1} | ")
-                error += (" " * 3) * int(len(error_line_indent) > self.indent_size)
-                error += (" " * self.indent_size) * int(bool(error_line_indent))
+                error += (" " * 3) * int(len(error_line_indent) > 4)
+                error += (" " * 4) * int(bool(error_line_indent))
                 error += " " * (last_left.begin_col - first_non_white_space) + "^" + "\n"
                 left_open_parenthesis = True
 
@@ -485,8 +445,8 @@ class Lexer:
                 error += f"HELP: Add (end) after line {self.ln + 1} like below:\n\n"
                 current_line_indent = re.match(pattern = r"[ \t]*", string = current_line).group()
 
-                error += f"{self.ln + 1} | " + "..." * int(len(current_line_indent) > self.indent_size)
-                error += (" " * self.indent_size) * int(bool(current_line_indent)) + current_line.strip() + "\n"
+                error += f"{self.ln + 1} | " + "..." * int(len(current_line_indent) > 4)
+                error += (" " * 4) * int(bool(current_line_indent)) + current_line.strip() + "\n"
                 error += f"{self.ln + 2} | " + "end" + "\n"
                 error += " " * len(f"{self.ln + 2} | ") + "+++" + "\n"
 
@@ -521,19 +481,6 @@ if __name__ == "__main__":
 
     parser.add_argument("--source", help="A small code sample to execute")
     parser.add_argument("--file", help="Source file")
-    parser.add_argument(
-        "--spaces",
-        help="Use spaces for indentation, default\n"
-        + "In other words, when supplying neither --spaces not --tabs, --spaces is default",
-        action="store_true",
-        default=True,
-    )
-    parser.add_argument(
-        "--tabs", help="Use tabs for indentation", action="store_true", default=False
-    )
-    parser.add_argument(
-        "--indent_size", help="Indent size", default=4
-    )  # this means one indent token equals 4 spaces/tabs
 
     args = parser.parse_args()
     cmd_line = "".join(argv)
@@ -546,58 +493,9 @@ if __name__ == "__main__":
         source = args.source
         file = "<stdin>"
 
-    # Indent type
-    if (
-        "--spaces" in argv and "--tabs" in argv
-    ):  # both --spaces and --tabs were supplied
-        print("You can not use both tabs and spaces indentation, pick one", file = stderr)
-        exit(1)
-
-    supplied_spaces_explicitly = False
-    if (
-        "--spaces" in argv and "--tabs" not in argv
-    ):  # --spaces was supplied, --tabs was not
-        indent = " "
-        supplied_spaces_explicitly = True
-    elif (
-        "--tabs" in argv and "--spaces" not in argv
-    ):  # --tabs was supplied, --spaces was not
-        indent = "\t"
-        supplied_spaces_explicitly = False
-    else:  # neither --spaces nor --tabs, then assume --spaces
-        indent = " "  # not supplied
-        supplied_spaces_explicitly = False
-
-    # Indent size
-    try:
-        args.indent_size = int(args.indent_size)
-    except:
-        print(f"--indent_size '{args.indent_size}' is not a valid positive integer", file = stderr)
-        exit(0)
-
-    if args.indent_size <= 0:
-        print(f"--indent_size '{args.indent_size}' is not a positive integer", file = stderr)
-        exit(0)
-
-    if "--indent_size" in argv:  # --indent_size was supplied, use supplied value
-        size = args.indent_size
-    else:
-        # --indent_size was NOT supplied
-        if "--tabs" in argv:  # --tabs only
-            size = 1  # Use 1 tab
-        else:  # --spaces or (no --spaces and no --tabs)
-            size = 4
-
-    if size <= 0:
-        print("Please give --indent_size a positive number", file = stderr)
-        exit(0)
-
     tokenizer = Lexer(
         file_name = file,
         text=source,
-        indent_type=indent,
-        indent_size=size,
-        supplied_spaces_explicitly=supplied_spaces_explicitly,
     )
     for token in tokenizer:
         print(token, file = stderr)
