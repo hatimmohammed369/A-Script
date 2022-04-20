@@ -157,7 +157,9 @@ class Lexer:
                     tok.name = "INDENT"
                     self.indents_stack.append(len(tok.value))
                 else:
+                    # No INDENT/DEDEN, just advance
                     tok = None
+                    self.advance(steps = len(captured_indent))
 
                 if tok:
                     self.indents_tokens_stack.append(tok)
@@ -372,7 +374,7 @@ class Lexer:
                     self.checked_indent = True
                 tok = None
                 if len(line_value) != 0:
-                    indentation = False
+                    current_position_is_indentation = not self.checked_indent # True when at line head, False otherwise
                     while True: # Generate all tokens in current line
                         if (
                             self.col == 0 and
@@ -382,16 +384,15 @@ class Lexer:
                             )
                         ):
                             # WHITE-SPACES LINE
-                            self.advance(steps = len(line_value) - 1) # the (- 1) is for not including \n
+                            self.advance(steps = len(line_value.removesuffix("\n"))) # exclude \n
                             # We need to reach this line's (\n), not overcome it
                             # so advance the last item in this line, which is \n
                         else:
-                            if useless_white_space_pattern.match(string = self.text[self.idx]) and not indentation:
+                            if useless_white_space_pattern.match(string = self.text[self.idx]) and not current_position_is_indentation:
                                 if (
                                     (self.col == 0 and self.left_parenthesis_stack) or
                                     (self.col != 0 and self.col < len(line_value))
                                 ):
-                                    indentation = False
                                     stop = re.compile(pattern = r"[^\s]|\n").search(
                                         string = line_value,
                                         pos    = self.col + 1,
@@ -402,14 +403,14 @@ class Lexer:
                                     else:
                                         steps = len(line_value) - self.idx
                                     self.advance(steps)
-                                else:
-                                    indentation = True
                             else:
                                 error, tok = self.generate_next_token()
                                 if error:
                                     print(error, file = stderr)
                                     exit(1)
                                 else:
+                                    # We moved beyond line head, indentation no longer exist
+                                    current_position_is_indentation = False
                                     if tok:
                                         self.tokens.append(tok)
                                         if tok.value == "\n" or tok.name.startswith("MULTI_LINED"):
