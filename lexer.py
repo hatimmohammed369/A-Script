@@ -36,7 +36,7 @@ class Token:
     def __repr__(self):
         self_idx = f"{self.begin_idx}-{self.end_idx}"
         self_col = f"{self.begin_col}-{self.end_col}"
-        self_ln  = f"{self.begin_ln if self.begin_ln == self.end_ln else {self.begin_ln}-{self.end_ln}}"
+        self_ln  = str(self.begin_ln) if self.begin_ln == self.end_ln else f"{self.begin_ln}-{self.end_ln}"
         return f"Token({self.name}, {repr(self.value)}, ({self_idx}, {self_col}, {self_ln}))"
 
     __str__ = __repr__
