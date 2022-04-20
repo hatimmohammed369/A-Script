@@ -124,10 +124,11 @@ NUMBER_PATTERN = re.compile(FLOAT_PATTERN.pattern + "|" + INT_PATTERN.pattern)
 
 CHAR_PATTERN = re.compile(pattern=r"'(\\(\\|'|[abfnrtv]|x\d{2})|.)'")
 
-STRING_PATTERN = re.compile(
-    r'".*(?<!\\)"', re.DOTALL
-)  # Match (matching ") ONLY IF this (matching ") is not preceded by \
-# This way we can strings like "This is "A String" inside another"
+STRING_PATTERN = r'".*(?<!\\)"'
+
+SINGLE_LINED_STRING_PATTERN = re.compile(pattern = STRING_PATTERN) # Match (matching ") ONLY IF this (matching ") is not preceded by \
+
+MULTI_LINED_STRING_PATTERN  = re.compile(pattern = STRING_PATTERN, flags = re.DOTALL)
 
 NAME_PATTERN = re.compile(r"[_a-zA-Z][_a-zA-Z0-9]*")
 

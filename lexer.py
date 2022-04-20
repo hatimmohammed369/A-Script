@@ -164,19 +164,33 @@ class Lexer:
 
         # COMMENTS
         elif current_char == "#":
-            end = self.current_line_obj.end
-            if end == len(self.text) - 1:
-                end += 1
             tok = Token(
-                name      = "COMMENT",
-                value     = self.text[self.idx : end],
                 begin_idx = self.idx,
-                end_idx   = end,
                 begin_col = self.col,
                 begin_ln  = self.ln,
-                end_ln    = self.ln
             )
-            tok.end_col = tok.begin_col + len(tok.value)
+
+            if multi_lined_comment := re.compile(pattern = r"##.*##", flags = re.DOTALL).match(
+                string = self.text,
+                pos    = self.idx,
+            ):
+                # MULTI LINED COMMENT
+                tok.name  = "MULTI_LINED_COMMENT"
+                tok.value = multi_lined_comment.group()
+                tok.end_col = -1
+                for c in reversed(tok.value):
+                    if c == "\n":
+                        break
+                    else:
+                        tok.end_col += 1
+                tok.end_ln = tok.begin_ln + tok.value.count("\n")
+            else:
+                # SINGLE LINE COMMENT
+                tok.name    = "COMMENT"
+                tok.value   = current_line[self.col : ].removesuffix("\n") # exclude (\n)
+                tok.end_col = tok.begin_col + len(tok.value)
+                tok.end_ln  = tok.begin_ln
+            tok.end_idx = tok.begin_idx + len(tok.value)
 
         # LINE BREAK
         elif current_char == "\n":
@@ -295,30 +309,29 @@ class Lexer:
 
         # STRINGS
         elif current_char == '"':
-            string_match = STRING_PATTERN.match(string = self.text, pos = self.idx)
-            if string_match:
-                # SUCCESSFUL
-                match = string_match.group()
-                tok = Token(
-                    value     = match,
-                    begin_idx = self.idx,
-                    begin_col = self.col,
-                    begin_ln  = self.ln,
-                )
-                tok.end_idx = tok.begin_idx + len(tok.value)
-                if "\n" in tok.value:
-                    tok.name    = "MULTI_LINED_STRING"
-                    tok.end_col = -1
-                    for c in reversed(match):
-                        if c == "\n":
-                            break
-                        else:
-                            tok.end_col += 1
-                    tok.end_ln = tok.begin_ln + match.count("\n")
-                else:
-                    tok.name    = "STRING"
-                    tok.end_col = tok.begin_col + len(tok.value)
-                    tok.end_ln = tok.begin_ln + len(tok.value)
+            tok = Token(
+                begin_idx = self.idx,
+                begin_col = self.col,
+                begin_ln  = self.ln,
+            )
+
+            if multi_lined_string := MULTI_LINED_STRING_PATTERN.match(string = self.text, pos = self.idx):
+                # MULTI LINED STRING
+                tok.name  = "MULTI_LINED_STRING"
+                tok.value = multi_lined_string.group()
+                tok.end_col = -1
+                for c in reversed(tok.value):
+                    if c == "\n":
+                        break
+                    else:
+                        tok.end_col += 1
+                tok.end_ln = tok.begin_ln + tok.value.count("\n")
+            elif single_lined_string := SINGLE_LINED_STRING_PATTERN.match(string = current_line, pos = self.col):
+                # SINGLE LINE STRING
+                tok.name    = "STRING"
+                tok.value   = single_lined_string.group()
+                tok.end_col = tok.begin_col + len(tok.value)
+                tok.end_ln  = tok.begin_ln
             else:
                 # Un-terminated string
                 first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).start()
@@ -327,10 +340,13 @@ class Lexer:
                 error += f"{self.ln + 1} | " + current_line.strip() + "\n"
                 error += " " * len(f"{self.ln + 1} | ") + " " * (self.col - first_non_white_space) + "^" + "\n"
 
+            tok.end_idx = tok.begin_idx + len(tok.value)
+
+
         if not error:
             if tok:
-                if tok.name != "MULTI_LINED_STRING":
-                    # using self.advance when encountering MULTI_LINED_STRING is dangerous
+                if not tok.name.startswith("MULTI_LINED"):
+                    # using self.advance when encountering MULTI_LINED_STRING/MULTI_LINED_COMMENT is dangerous
                     # since self.col becomes invalid after call to self.advance
                     self.advance(steps = len(tok.value))
         return error, tok
@@ -338,7 +354,6 @@ class Lexer:
 
     def generate_tokens(self):
         useless_white_space_pattern = re.compile(pattern = r"(?!\n)\s")
-        last_line = 0
         error = ""
         if not self.done:
             while True: # Iterate lines
@@ -346,11 +361,10 @@ class Lexer:
                 if not self.current_line_obj:
                     self.ln -= 1
                     self.current_line_obj = self.lines[self.ln]
-                    last_line = self.ln
                     break
                 line_value = self.current_line_obj.value
                 if not (
-                    (last_tok := None if not self.tokens else self.tokens[-1]) and last_tok.name == "MULTI_LINED_STRING"
+                    (last_tok := None if not self.tokens else self.tokens[-1]) and last_tok.name.startswith("MULTI_LINED")
                 ):
                     self.col = 0
                     self.checked_indent = False
@@ -398,13 +412,14 @@ class Lexer:
                                 else:
                                     if tok:
                                         self.tokens.append(tok)
-                                        if tok.value == "\n" or tok.name == "MULTI_LINED_STRING":
+                                        if tok.value == "\n" or tok.name.startswith("MULTI_LINED"):
                                             break
                     # end "while True" generate all tokens in current line
                 # Done processing
                 if not tok or tok.value == "\n":
                     self.ln += 1
                 else:
+                    self.idx = tok.end_idx
                     self.col = tok.end_col + 1
                     self.ln  = tok.end_ln
             # end "while True" Iterate all lines
@@ -499,13 +514,12 @@ if __name__ == "__main__":
     else:
         source = args.source
         file = "<stdin>"
-        print(f"{source = }")
 
     # Indent type
     if (
         "--spaces" in argv and "--tabs" in argv
     ):  # both --spaces and --tabs were supplied
-        print("You can not use both tabs and spaces indentation, pick one")
+        print("You can not use both tabs and spaces indentation, pick one", file = stderr)
         exit(1)
 
     supplied_spaces_explicitly = False
@@ -527,11 +541,11 @@ if __name__ == "__main__":
     try:
         args.indent_size = int(args.indent_size)
     except:
-        print(f"--indent_size '{args.indent_size}' is not a valid positive integer")
+        print(f"--indent_size '{args.indent_size}' is not a valid positive integer", file = stderr)
         exit(0)
 
     if args.indent_size <= 0:
-        print(f"--indent_size '{args.indent_size}' is not a positive integer")
+        print(f"--indent_size '{args.indent_size}' is not a positive integer", file = stderr)
         exit(0)
 
     if "--indent_size" in argv:  # --indent_size was supplied, use supplied value
@@ -544,7 +558,7 @@ if __name__ == "__main__":
             size = 4
 
     if size <= 0:
-        print("Please give --indent_size a positive number")
+        print("Please give --indent_size a positive number", file = stderr)
         exit(0)
 
     tokenizer = Lexer(
@@ -555,4 +569,4 @@ if __name__ == "__main__":
         supplied_spaces_explicitly=supplied_spaces_explicitly,
     )
     for token in tokenizer:
-        print(token)
+        print(token, file = stderr)
