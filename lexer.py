@@ -339,11 +339,14 @@ class Lexer:
     def generate_tokens(self):
         useless_white_space_pattern = re.compile(pattern = r"(?!\n)\s")
         last_line = 0
+        error = ""
         if not self.done:
             while True: # Iterate lines
                 self.current_line_obj = self.lines.get(self.ln, None)
                 if not self.current_line_obj:
-                    last_line = 0 if self.ln == 0 else self.ln - 1
+                    self.ln -= 1
+                    self.current_line_obj = self.lines[self.ln]
+                    last_line = self.ln
                     break
                 line_value = self.current_line_obj.value
                 if not (
@@ -406,14 +409,53 @@ class Lexer:
                     self.ln  = tok.end_ln
             # end "while True" Iterate all lines
 
-            EOF = Token(
-                name  = "EOF",
-                value = "",
-            )
-            EOF.begin_idx = EOF.end_idx = len(self.text)
-            EOF.begin_col = EOF.end_col = last_line
-            EOF.begin_ln  = EOF.end_ln  = max(0, self.ln - 1)
-            self.tokens.append(EOF)
+            current_line = self.current_line_obj.value
+
+            left_open_parenthesis = False
+            if self.left_parenthesis_stack:
+                last_left = self.left_parenthesis_stack[-1]
+                error_line = self.lines[last_left.begin_ln].value
+                first_non_white_space = re.search(pattern = r"[^\s]", string = error_line).start()
+
+                error += f"Syntax Error in \"{self.file}\", line {last_left.begin_ln + 1}, column {last_left.begin_col + 1}:\n"
+                error += " " * 4 + f"Un-closed {last_left.value}\n"
+                error_line_indent = re.match(pattern = r"[ \t]*", string = error_line).group()
+
+                error += f"{last_left.begin_ln + 1} | " + "..." * int(len(error_line_indent) > self.indent_size)
+                error += (" " * self.indent_size) * int(bool(error_line_indent)) + error_line.strip() + "\n"
+                error += " " * len(f"{last_left.begin_ln + 1} | ")
+                error += (" " * 3) * int(len(error_line_indent) > self.indent_size)
+                error += (" " * self.indent_size) * int(bool(error_line_indent))
+                error += " " * (last_left.begin_col - first_non_white_space) + "^" + "\n"
+                left_open_parenthesis = True
+
+            if not left_open_parenthesis and self.indents_stack:
+                if error:
+                    error += "\n"
+                    error += "<===========================================================================>\n"
+                    error += "\n"
+                error += f"Indentation Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
+                error += " " * 4 + "Expected (end) statement\n\n"
+                error += f"HELP: Add (end) after line {self.ln + 1} like below:\n\n"
+                current_line_indent = re.match(pattern = r"[ \t]*", string = current_line).group()
+
+                error += f"{self.ln + 1} | " + "..." * int(len(current_line_indent) > self.indent_size)
+                error += (" " * self.indent_size) * int(bool(current_line_indent)) + current_line.strip() + "\n"
+                error += f"{self.ln + 2} | " + "end" + "\n"
+                error += " " * len(f"{self.ln + 2} | ") + "+++" + "\n"
+
+            if error:
+                print(error, file = stderr)
+                exit(1)
+            else:
+                EOF = Token(
+                    name  = "EOF",
+                    value = "",
+                )
+                EOF.begin_idx = EOF.end_idx = len(self.text)
+                EOF.begin_col = EOF.end_col = last_line
+                EOF.begin_ln  = EOF.end_ln  = max(0, self.ln - 1)
+                self.tokens.append(EOF)
 
             self.done = True
         return self
