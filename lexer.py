@@ -115,7 +115,12 @@ class Lexer:
         steps = None
 
         # INDENTATION
-        if not self.checked_indent_in_current_line and not self.left_parenthesis_stack and self.col == 0:
+        if (
+            current_line.removesuffix("\n") and # current line is not empty AND
+            not self.checked_indent_in_current_line and # We DID NOT check indentation in current line AND
+            not self.left_parenthesis_stack and # Multi-lining is OFF AND
+            self.col == 0 # It's line head
+        ):
             self.checked_indent_in_current_line = True
             captured_indent = re.match(pattern = r"[ \t]*", string = current_line).group()
 
@@ -123,7 +128,10 @@ class Lexer:
             # so it's always guaranteed we have at least one non-white-space in current line
             first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).group()
             if first_non_white_space not in ("#", ")", "}", "]"):
-                if (" " in captured_indent and self.indent_name == "tab") or ("\t" in captured_indent and self.indent_name == "space"):
+                if (
+                    (" " in captured_indent and self.indent_name == "tab") or
+                    "\t" in captured_indent and self.indent_name == "space"
+                ):
                     # Mixing tabs an spaces
                     error += f"Indentation Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
                     error += " " * 4 + "Mixing tabs and spaces in indentation\n"
@@ -357,9 +365,8 @@ class Lexer:
 
             if steps:
                 if (
-                    not tok # There's no change in indentation
-                    or
-                    tok and not tok.name.startswith("MULTI_LINED") # A Valid none MULTI_LINED token
+                    not tok or # There's no change in indentation OR
+                    (tok and not tok.name.startswith("MULTI_LINED")) # A Valid non-MULTI_LINED token
                 ):
                     # using self.advance when encountering MULTI_LINED_STRING/MULTI_LINED_COMMENT is dangerous
                     # since self.col becomes invalid after call to self.advance
@@ -379,7 +386,8 @@ class Lexer:
                     break
                 line_value = self.current_line_obj.value
                 if not (
-                    (last_tok := None if not self.tokens else self.tokens[-1]) and last_tok.name.startswith("MULTI_LINED")
+                    (last_tok := None if not self.tokens else self.tokens[-1]) and # There's at least one token AND
+                    last_tok.name.startswith("MULTI_LINED") # It's a MULTI_LINED token
                 ):
                     self.col = 0
 
@@ -389,50 +397,56 @@ class Lexer:
                 else:
                     self.checked_indent_in_current_line = True
                 tok = None
-                if len(line_value) != 0:
-                    current_position_is_indentation = not self.checked_indent_in_current_line # True when at line head, False otherwise
-                    while True: # Generate all tokens in current line
+                current_position_is_indentation = not self.checked_indent_in_current_line # True when at line head, False otherwise
+                while True: # Generate all tokens in current line
+                    if (
+                        self.col == 0 and # It's line head AND
+                        re.fullmatch(     # This line is just white-spaces
+                            pattern = rf"{useless_white_space_pattern.pattern}+",
+                            string = line_value.removesuffix("\n")
+                        )
+                    ):
+                        # WHITE-SPACES LINE
+                        self.advance(steps = len(line_value.removesuffix("\n"))) # exclude \n
+                        # We need to reach this line's (\n), not overcome it
+                        # so advance the last item in this line, which is \n
+                    else:
                         if (
-                            self.col == 0 and
-                            re.fullmatch(
-                                pattern = rf"{useless_white_space_pattern.pattern}+",
-                                string = line_value.removesuffix("\n")
-                            )
+                            # Current char is a useless white-space AND
+                            useless_white_space_pattern.match(string = self.text[self.idx]) and
+                            # This is not line head
+                            not current_position_is_indentation
                         ):
-                            # WHITE-SPACES LINE
-                            self.advance(steps = len(line_value.removesuffix("\n"))) # exclude \n
-                            # We need to reach this line's (\n), not overcome it
-                            # so advance the last item in this line, which is \n
-                        else:
-                            if useless_white_space_pattern.match(string = self.text[self.idx]) and not current_position_is_indentation:
-                                if (
-                                    (self.col == 0 and self.left_parenthesis_stack) or
-                                    (self.col != 0 and self.col < len(line_value))
-                                ):
-                                    stop = re.compile(pattern = r"[^\s]|\n").search(
-                                        string = line_value,
-                                        pos    = self.col + 1,
-                                        endpos = len(line_value)
-                                    )
-                                    if stop:
-                                        steps = len(stop.group())
-                                    else:
-                                        steps = len(line_value) - self.idx
-                                    self.advance(steps)
-                            else:
-                                error, tok = self.generate_next_token()
-                                if error:
-                                    print(error, file = stderr)
-                                    exit(1)
+                            if (
+                                # It's line head but Multi-lining is ON OR
+                                (self.col == 0 and self.left_parenthesis_stack) or
+                                # We are in the middle of current line
+                                self.col != 0 and self.col < len(line_value)
+                            ):
+                                stop = re.compile(pattern = r"[^\s]|\n").search(
+                                    string = line_value,
+                                    pos    = self.col + 1,
+                                    endpos = len(line_value)
+                                )
+                                if stop:
+                                    steps = len(stop.group())
                                 else:
-                                    # We moved beyond line head, indentation no longer exist
-                                    current_position_is_indentation = False
-                                    if tok:
-                                        self.tokens.append(tok)
-                                        if tok.value == "\n" or tok.name.startswith("MULTI_LINED"):
-                                            break
-                    # end "while True" generate all tokens in current line
-                # Done processing
+                                    steps = len(line_value) - self.idx
+                                self.advance(steps)
+                        else:
+                            error, tok = self.generate_next_token()
+                            if error:
+                                print(error, file = stderr)
+                                exit(1)
+                            else:
+                                # We moved beyond line head, indentation no longer exist
+                                current_position_is_indentation = False
+                                if tok:
+                                    self.tokens.append(tok)
+                                    if tok.value == "\n" or tok.name.startswith("MULTI_LINED"):
+                                        break
+                # end "while True" generate all tokens in current line
+
                 if not tok or tok.value == "\n":
                     self.ln += 1
                 else:
