@@ -64,7 +64,7 @@ class Lexer:
 
         self.indents_stack = []  # how many indents currently
         self.indents_tokens_stack: List[Token] = []
-        self.checked_indent = False
+        self.checked_indent_in_current_line = False
 
         self.lines: Dict[int, Line] = {}
         old_idx, idx, ln = 0, 0, 0
@@ -112,57 +112,62 @@ class Lexer:
         error = ""
         current_line = self.current_line_obj.value
         current_char = self.text[self.idx]
+        steps = None
 
         # INDENTATION
-        if self.col == 0 and not self.left_parenthesis_stack and not self.checked_indent:
-            self.checked_indent = True
-            captured_indent_match = re.match(pattern = r"[ \t]*", string = current_line)
-            captured_indent = captured_indent_match.group()
+        if not self.checked_indent_in_current_line and not self.left_parenthesis_stack and self.col == 0:
+            self.checked_indent_in_current_line = True
+            captured_indent = re.match(pattern = r"[ \t]*", string = current_line).group()
 
-            if (" " in captured_indent and self.indent_name == "tab") or ("\t" in captured_indent and self.indent_name == "space"):
-                # Mixing tabs an spaces
-                error += f"Indentation Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
-                error += " " * 4 + "Mixing tabs and spaces in indentation\n"
-                error += f"{self.ln + 1} | " + "".join("*" if c == "\t" else "+" for c in captured_indent)
-                error += current_line[len(captured_indent) : ]
-                error += " " * len(f"{self.ln + 1} | ")
-                illegar_chars = 0
-                for c in captured_indent:
-                    if c != self.indent_type:
-                        illegar_chars += 1
-                        error += "^"
+            # first_non_white_space will never be None because empty/white-spaces lines are not checked for indentation
+            # so it's always guaranteed we have at least one non-white-space in current line
+            first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).group()
+            if first_non_white_space not in ("#", ")", "}", "]"):
+                if (" " in captured_indent and self.indent_name == "tab") or ("\t" in captured_indent and self.indent_name == "space"):
+                    # Mixing tabs an spaces
+                    error += f"Indentation Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
+                    error += " " * 4 + "Mixing tabs and spaces in indentation\n"
+                    error += f"{self.ln + 1} | " + "".join("*" if c == "\t" else "+" for c in captured_indent)
+                    error += current_line[len(captured_indent) : ]
+                    error += " " * len(f"{self.ln + 1} | ")
+                    illegar_chars = 0
+                    for c in captured_indent:
+                        if c != self.indent_type:
+                            illegar_chars += 1
+                            error += "^"
+                        else:
+                            error += " "
+                    error += "\n"
+                    error += " " * len(f"{self.ln + 1} | ") + f"Found {'one' if illegar_chars == 1 else illegar_chars} "
+                    error += f"{'tab' if self.indent_name == 'space' else 'space'}{'s' if illegar_chars > 1 else ''}\n\n"
+                    error += "In every indent in this file, remove ALL "
+                    error += f"{'TAB' if self.indent_name == 'space' else 'SPACE'}S"
+
+                if not error:
+                    current_indent = 0 if not self.indents_stack else self.indents_stack[-1]
+                    tok = Token(
+                        value     = captured_indent,
+                        begin_idx = self.idx,
+                        begin_col = self.col,
+                        begin_ln  = self.ln,
+                        end_ln    = self.ln
+                    )
+                    if len(captured_indent) < current_indent:
+                        # OUTDENT
+                        tok.name = "OUTDENT"
+                        self.indents_stack.pop(-1)
+                    elif current_indent < len(captured_indent):
+                        # INDENT
+                        tok.name = "INDENT"
+                        self.indents_stack.append(len(tok.value))
                     else:
-                        error += " "
-                error += "\n"
-                error += " " * len(f"{self.ln + 1} | ") + f"Found {'one' if illegar_chars == 1 else illegar_chars} "
-                error += f"{'tab' if self.indent_name == 'space' else 'space'}{'s' if illegar_chars > 1 else ''}\n\n"
-                error += "In every indent in this file, remove ALL "
-                error += f"{'TAB' if self.indent_name == 'space' else 'SPACE'}S"
+                        # No INDENT/DEDEN, just advance
+                        tok = None
 
-            if not error:
-                current_indent = 0 if not self.indents_stack else self.indents_stack[-1]
-                tok = Token(
-                    value     = captured_indent,
-                    begin_idx = self.idx,
-                    begin_col = self.col,
-                    begin_ln  = self.ln,
-                    end_ln    = self.ln
-                )
-                if len(captured_indent) < current_indent:
-                    # OUTDENT
-                    tok.name = "OUTDENT"
-                    self.indents_stack.pop(-1)
-                elif current_indent < len(captured_indent):
-                    # INDENT
-                    tok.name = "INDENT"
-                    self.indents_stack.append(len(tok.value))
-                else:
-                    # No INDENT/DEDEN, just advance
-                    tok = None
-                    self.advance(steps = len(captured_indent))
-
-                if tok:
-                    self.indents_tokens_stack.append(tok)
+                    if tok:
+                        self.indents_tokens_stack.append(tok)
+            # end "if first_non_white_space not in ("#", ")", "}", "]")"
+            steps = len(captured_indent)
 
         # COMMENTS
         elif current_char == "#":
@@ -346,11 +351,19 @@ class Lexer:
 
 
         if not error:
-            if tok:
-                if not tok.name.startswith("MULTI_LINED"):
+            if not steps: # WE DID NOT CHECK FOR INDENTATION, WE DID SOMETHING ELSE
+                if tok:
+                    steps = len(tok.value)
+
+            if steps:
+                if (
+                    not tok # There's no change in indentation
+                    or
+                    tok and not tok.name.startswith("MULTI_LINED") # A Valid none MULTI_LINED token
+                ):
                     # using self.advance when encountering MULTI_LINED_STRING/MULTI_LINED_COMMENT is dangerous
                     # since self.col becomes invalid after call to self.advance
-                    self.advance(steps = len(tok.value))
+                    self.advance(steps)
         return error, tok
 
 
@@ -369,12 +382,15 @@ class Lexer:
                     (last_tok := None if not self.tokens else self.tokens[-1]) and last_tok.name.startswith("MULTI_LINED")
                 ):
                     self.col = 0
-                    self.checked_indent = False
+
+                    # If multi-lining is ON, assume we checked for indentation
+                    # because there's no indentation when multi-lining
+                    self.checked_indent_in_current_line = bool(self.left_parenthesis_stack)
                 else:
-                    self.checked_indent = True
+                    self.checked_indent_in_current_line = True
                 tok = None
                 if len(line_value) != 0:
-                    current_position_is_indentation = not self.checked_indent # True when at line head, False otherwise
+                    current_position_is_indentation = not self.checked_indent_in_current_line # True when at line head, False otherwise
                     while True: # Generate all tokens in current line
                         if (
                             self.col == 0 and
