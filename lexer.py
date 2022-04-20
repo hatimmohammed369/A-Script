@@ -453,8 +453,8 @@ class Lexer:
                     value = "",
                 )
                 EOF.begin_idx = EOF.end_idx = len(self.text)
-                EOF.begin_col = EOF.end_col = last_line
-                EOF.begin_ln  = EOF.end_ln  = max(0, self.ln - 1)
+                EOF.begin_col = EOF.end_col = self.current_line_obj.end
+                EOF.begin_ln  = EOF.end_ln  = self.ln
                 self.tokens.append(EOF)
 
             self.done = True
