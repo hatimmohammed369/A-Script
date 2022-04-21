@@ -16,7 +16,7 @@ from sys import stderr
 class Line:
     value: str = "" # Actual text excluding \n (line breaks)
     begin: int = 0 # index of first character in line
-    # it can be that begin == end, in such case the line empty, it's "\n"
+    # it can be that begin == end+1, in such case the line empty, it's "\n", the smallest line possible
     end: int = 0 # nearest line break when searching forwards
 
 
@@ -44,45 +44,49 @@ class Token:
 
 
 class Lexer:
-    def __init__(
-        self,
-        file_name:str,
-        text: str,  # Text to be tokenized
-    ):
-        self.file = file_name
-        self.text: str = text
-        if not self.text.endswith("\n"):
-            self.text += "\n"
+    def __init__(self, file_name : str, text: str):
+        self.file   : str = file_name
+        self.source : str = text
+        if not self.source.endswith("\n"):
+            self.source += "\n"
 
         self.idx, self.ln, self.col = 0, 0, 0
 
-        self.tokens: list[Token] = []
+        self.tokens: list[Token] = [] # Stores all generated tokens
 
         self.indents_stack: List[int] = []  # how many indents currently
-        self.indents_tokens_stack: List[Token] = []
+        self.indents_tokens_stack: List[Token] = [] # stores all INDENT/OUTDENT tokens
         self.checked_indent_in_current_line = False
 
+        # if self.source does not end with (\n), then add (\n)
+        # this way we can guarantee there's at least one line in every input
+        # so there's no way self.lines is empty, and so we can always get self.lines[0]
         self.lines: Dict[int, Line] = {}
         ln = 0
-        for line_match in re.finditer(pattern = r".*\n", string = self.text):
+        for line_match in re.finditer(pattern = r".*\n", string = self.source):
             self.lines[ln] = Line(value = line_match.group(), begin = line_match.start(), end = line_match.end())
             ln += 1
 
-        self.current_line_obj = self.lines.get(0, None)
+        self.current_line_obj = self.lines[0] # self.lines is never empty, so self.current_line_obj always exists
 
-        # becomes True after this instance successfully executes tokenize()
+        # becomes True after this instance successfully executes generate_tokens()
         self.done = False
 
-        # Store left parentheses "( or [" tokens to enable multi-line statements
+        # Store left parentheses, ( or [ or {, tokens to enable multi-lined statements
         self.left_parenthesis_stack: List[Token] = []
 
 
     def pos(self) -> str:
+        """
+        Give a nice string representation of current position in current line, something like this:
+            func_name(0)
+                     ^
+        """
         return self.current_line_obj.value + " " * self.col + "^"
 
 
     def advance(self, steps):
-        self.idx = min(self.idx + steps, len(self.text))
+        self.idx = min(self.idx + steps, len(self.source)) # maintain self.idx <= len(self.source)
         self.col = self.col + steps
         return self
 
@@ -91,8 +95,8 @@ class Lexer:
         tok = None
         error = ""
         current_line = self.current_line_obj.value
-        current_char = self.text[self.idx]
-        steps = None
+        current_char = self.source[self.idx]
+        steps = None # takes int value only when detecting indentation, None otherwise
 
         # INDENTATION
         if (
@@ -114,29 +118,28 @@ class Lexer:
             first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).group()
             if first_non_white_space not in ("#", ")", "}", "]"):
                 current_indent = 0 if not self.indents_stack else self.indents_stack[-1]
-                tok = Token(
-                    value     = captured_indent,
-                    begin_idx = self.idx,
-                    begin_col = self.col,
-                    begin_ln  = self.ln,
-                    end_ln    = self.ln
-                )
-                if len(captured_indent) < current_indent:
-                    # OUTDENT
-                    tok.name = "OUTDENT"
-                    self.indents_stack.pop(-1)
-                elif current_indent < len(captured_indent):
-                    # INDENT
-                    tok.name = "INDENT"
-                    self.indents_stack.append(len(tok.value))
-                else:
-                    # No INDENT/DEDEN, just advance
-                    tok = None
+                if len(captured_indent) != current_indent:
+                    # Generate token ONLY WHEN there's change in indentation
+                    tok = Token(
+                        value     = captured_indent,
+                        begin_idx = self.idx,
+                        begin_col = self.col,
+                        begin_ln  = self.ln,
+                        end_ln    = self.ln
+                    )
+                    if len(captured_indent) < current_indent:
+                        # OUTDENT
+                        tok.name = "OUTDENT"
+                        self.indents_stack.pop(-1)
+                    elif current_indent < len(captured_indent):
+                        # INDENT
+                        tok.name = "INDENT"
+                        self.indents_stack.append(len(tok.value))
 
-                if tok:
                     self.indents_tokens_stack.append(tok)
             # end "if first_non_white_space not in ("#", ")", "}", "]")"
             steps = len(captured_indent)
+        # END INDENTATION
 
         # COMMENTS
         elif current_char == "#":
@@ -145,9 +148,8 @@ class Lexer:
                 begin_col = self.col,
                 begin_ln  = self.ln,
             )
-
             if multi_lined_comment := re.compile(pattern = r"##.*##", flags = re.DOTALL).match(
-                string = self.text,
+                string = self.source,
                 pos    = self.idx,
             ):
                 # MULTI LINED COMMENT
@@ -167,6 +169,7 @@ class Lexer:
                 tok.end_col = tok.begin_col + len(tok.value)
                 tok.end_ln  = tok.begin_ln
             tok.end_idx = tok.begin_idx + len(tok.value)
+        # END COMMENTS
 
         # LINE BREAK
         elif current_char == "\n":
@@ -196,6 +199,7 @@ class Lexer:
                 tok.name = "KEYWORD"
             else:
                 tok.name = "NAME"
+        # END NAME/KEYWORD
 
         # NUMBER
         elif number_match := NUMBER_PATTERN.match(string = current_line, pos = self.col):
@@ -213,6 +217,7 @@ class Lexer:
             else:
                 tok.name = "FLOAT::"
             tok.name += "NUMBER"
+        # END NUMBER
 
         # OPERATORS
         elif operator_match := OPERATOR_PATTERN.match(string = current_line, pos = self.col):
@@ -226,6 +231,7 @@ class Lexer:
             )
             tok.end_idx = tok.begin_idx + len(tok.value)
             tok.end_col = tok.begin_col + len(tok.value)
+        # END OPERATOR
 
         # SEPARATORS
         elif separator_match := SEPARATOR_PATTERN.match(string = current_line, pos = self.col):
@@ -250,6 +256,7 @@ class Lexer:
                     error += " " * 4 + f"Un-expected {tok.value}\n"
                     error += f"{self.ln + 1} | " + current_line.strip() + "\n"
                     error += " " * len(f"{self.ln + 1} | ") + " " * (self.col - first_non_white_space) + "^" + "\n"
+        # END SEPARATORS
 
         # CHARACTERS
         elif current_char == "'":
@@ -282,6 +289,7 @@ class Lexer:
                 error += f"{self.ln + 1} | " + current_line.strip() + "\n"
                 error += " " * len(f"{self.ln + 1} | ") + " " * (self.col - first_non_white_space) + "^" + "\n"
                 error += "Close this ' by adding another '\n"
+        # END CHARACTERS
 
         # STRINGS
         elif current_char == '"':
@@ -297,7 +305,7 @@ class Lexer:
                 tok.value   = single_lined_string.group()
                 tok.end_col = tok.begin_col + len(tok.value)
                 tok.end_ln  = tok.begin_ln
-            elif multi_lined_string := MULTI_LINED_STRING_PATTERN.match(string = self.text, pos = self.idx):
+            elif multi_lined_string := MULTI_LINED_STRING_PATTERN.match(string = self.source, pos = self.idx):
                 # MULTI LINED STRING
                 tok.name  = "MULTI_LINED_STRING"
                 tok.value = multi_lined_string.group()
@@ -317,7 +325,7 @@ class Lexer:
                 error += " " * len(f"{self.ln + 1} | ") + " " * (self.col - first_non_white_space) + "^" + "\n"
 
             tok.end_idx = tok.begin_idx + len(tok.value)
-
+        # END STRINGS
 
         if not error:
             if not steps: # WE DID NOT CHECK FOR INDENTATION, WE DID SOMETHING ELSE
@@ -332,6 +340,7 @@ class Lexer:
                     # using self.advance when encountering MULTI_LINED_STRING/MULTI_LINED_COMMENT is dangerous
                     # since self.col becomes invalid after call to self.advance
                     self.advance(steps)
+
         return error, tok
 
 
@@ -350,14 +359,19 @@ class Lexer:
                     (last_tok := None if not self.tokens else self.tokens[-1]) and # There's at least one token AND
                     last_tok.name.startswith("MULTI_LINED") # It's a MULTI_LINED token
                 ):
+                    # SO THIS CONDITION IS TRUE WHEN:
+                    #    - No tokens available
+                    #    - Last generate token IS NOT MULTI_LINED_COMMENT/MULTI_LINED_STRING
                     self.col = 0
-
                     # If multi-lining is ON, assume we checked for indentation
                     # because there's no indentation when multi-lining
                     self.checked_indent_in_current_line = bool(self.left_parenthesis_stack)
                 else:
+                    # Last generated token is either MULTI_LINED_COMMENT/MULTI_LINED_STRING
+                    # So we need to make an unusual jump
+                    # Jump to line when this MULTI_LINED token end one column after its end_col (in other word, end_col+1)
+                    # self.idx is increased in the unusual way, self.idx += len(tok.value)
                     self.checked_indent_in_current_line = True
-                tok = None
                 current_position_is_indentation = not self.checked_indent_in_current_line # True when at line head, False otherwise
                 while True: # Generate all tokens in current line
                     if (
@@ -374,8 +388,8 @@ class Lexer:
                     else:
                         if (
                             # Current char is a useless white-space AND
-                            useless_white_space_pattern.match(string = self.text[self.idx]) and
-                            # This is not line head
+                            useless_white_space_pattern.match(string = self.source[self.idx]) and
+                            # This is not line head so we don't skip indentation as if they're useless white-spaces
                             not current_position_is_indentation
                         ):
                             if (
@@ -384,6 +398,7 @@ class Lexer:
                                 # We are in the middle of current line
                                 self.col != 0 and self.col < len(line_value)
                             ):
+                                # THIS CONDITION SAYS MAKE SURE CURRENT POSITION IS NEVER INDENTATION
                                 stop = re.compile(pattern = r"[^\s]|\n").search(
                                     string = line_value,
                                     pos    = self.col + 1,
@@ -404,6 +419,11 @@ class Lexer:
                                 if tok:
                                     self.tokens.append(tok)
                                     if tok.value == "\n" or tok.name.startswith("MULTI_LINED"):
+                                        # We found (\n) which means we reach current line end OR
+                                        # We found a MULTI_LINED token, and so remaining characters in this line belong to this
+                                        # MULTI_LINED token we just found
+                                        # So there's no more work to be done in this line, we need to jump to
+                                        # line where this MULTI_LINED token ends
                                         break
                 # end "while True" generate all tokens in current line
 
@@ -411,11 +431,13 @@ class Lexer:
                 # which means we have at least the (\n) token
                 # which is the exact token need to break the loop above ([generate al tokens in current line] loop)
                 if tok.value == "\n":
+                    # We reached the end of current line
                     self.ln += 1
                 else:
-                    self.idx = tok.end_idx
-                    self.col = tok.end_col + 1
-                    self.ln  = tok.end_ln
+                    # We found a MULTI_LINED token, we need an abnormal jump
+                    self.idx = tok.end_idx # the first character after this MULTI_LINED token
+                    self.col = tok.end_col + 1 # the first character after this MULTI_LINED token in end line of this MULTI_LINED
+                    self.ln  = tok.end_ln # move to end line of this MULTI_LINED
             # end "while True" Iterate all lines
 
             current_line = self.current_line_obj.value
@@ -461,12 +483,13 @@ class Lexer:
                     name  = "EOF",
                     value = "",
                 )
-                EOF.begin_idx = EOF.end_idx = len(self.text)
+                EOF.begin_idx = EOF.end_idx = len(self.source)
                 EOF.begin_col = EOF.end_col = self.current_line_obj.end
                 EOF.begin_ln  = EOF.end_ln  = self.ln
                 self.tokens.append(EOF)
 
             self.done = True
+        # end "if not self.done"
         return self
 
 
