@@ -389,10 +389,9 @@ class Lexer:
                                     pos    = self.col + 1,
                                     endpos = len(line_value)
                                 )
-                                if stop:
-                                    steps = len(stop.group())
-                                else:
-                                    steps = len(line_value) - self.idx
+                                # no need to check if (stop) is None because we search for either a non-white-space or \n
+                                # each line self.lines ends with (\n), so it's always guaranteed that (stop) will find a match
+                                steps = len(stop.group())
                                 self.advance(steps)
                         else:
                             error, tok = self.generate_next_token()
