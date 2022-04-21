@@ -407,7 +407,10 @@ class Lexer:
                                         break
                 # end "while True" generate all tokens in current line
 
-                if not tok or tok.value == "\n":
+                # no need for (not tok) part because the smallest line possible is "\n"
+                # which means we have at least the (\n) token
+                # which is the exact token need to break the loop above ([generate al tokens in current line] loop)
+                if tok.value == "\n":
                     self.ln += 1
                 else:
                     self.idx = tok.end_idx
