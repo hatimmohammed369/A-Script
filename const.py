@@ -1,11 +1,10 @@
-from dataclasses import dataclass
-from typing import Any
-
 # KEYWORDS / OPERATORS / ...
 # You know, those sorts of things
 import re
 
 KEYWORDS = (
+    "import",
+    "from",
     "define",
     "mut",
     "const",
@@ -51,8 +50,10 @@ SORTED_KEYWORDS = (
     'false',
     'float',
     'for',
+    'from',
     'function',
     'if',
+    'import',
     'in',
     'int',
     'not',

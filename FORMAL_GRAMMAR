@@ -5,11 +5,23 @@
 # anything between '' is denotes just itself, so '(' denotes an actual ( written in code
 
 KEYWORDS: 'define' | 'mut' | 'const' | 'int' | 'float' | 'string' | 'char' | 'bool' | 'not' | 'and' | 'or' | 'true' | 'false' |
-    'array' | 'ref_of' | 'function' | 'return' | 'if' | 'else' | 'else_if' | 'for' | 'while' | 'break' | 'continue' | 'pass'
+    'array' | 'ref_of' | 'function' | 'return' | 'if' | 'else' | 'else_if' | 'for' | 'while' | 'break' | 'continue' | 'pass' |
+    'import' | 'from'
 
 STATEMENT: ( SIMPLE_STATEMENT | COMPOUND_STATEMENT ) [ [';'] LINE_BREAK | ';' ]
 
-SIMPLE_STATEMENT: 'pass' | 'break' | 'continue' | RETURN_STATEMENT | OPERATOR_EXPRESSION | STRUCT_EXPRESSION | STRUCT_MEMBERSHIP_ACCESS
+SIMPLE_STATEMENT: 'pass' | 'break' | 'continue' | RETURN_STATEMENT | OPERATOR_EXPRESSION |
+                STRUCT_EXPRESSION | STRUCT_MEMBERSHIP_ACCESS | IMPORT_STATEMENT
+
+
+IMPORT_STATEMENT: 'import' STRING | 'from' STRING 'import' ( ( NAME ',' )+ | '{' ( NAME ',' )+ '}' )
+# This (STRING) is path to file
+# import "path/to/file"
+# from "file" import {
+#   item0,
+#   item1,
+#   item2
+# }
 
 RETURN_STATEMENT: 'return' EXPRESSION
 
