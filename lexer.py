@@ -524,12 +524,18 @@ if __name__ == "__main__":
     cmd_line = "".join(argv)
 
     # Source code
-    if args.file:
+    if args.file and args.source:
+        print("Do not supply both --file and --source", file = stderr)
+        exit(1)
+    if args.file and not args.source:
         source = open(args.file).read()
         file = path.abspath(args.file)
-    else:
+    elif args.source and not args.file:
         source = args.source
         file = "<stdin>"
+    else:
+        print("You must supply either --file or --source, not both", file = stderr)
+        exit(1)
 
     tokenizer = Lexer(
         file_name = file,
