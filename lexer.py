@@ -104,6 +104,11 @@ class Lexer:
             self.checked_indent_in_current_line = True
             captured_indent = re.match(pattern = r"[ \t]*", string = current_line).group()
 
+            # Empty lines, "\n", can not introduce INDENT tokens because INDENT tokens objects have actual text in their (value) attribute
+            # But empty lines can introduce OUTDENT tokens, but syntactically OUTDENT is generated use (end) statement
+            # So empty lines MUST not be checked for indentation because they generate no tokens at all
+            # A line only made up of white-spaces is skipped and the code jumps line break (\n) of this white-spaces line
+
             # first_non_white_space will never be None because empty/white-spaces lines are not checked for indentation
             # so it's always guaranteed we have at least one non-white-space in current line
             first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).group()
