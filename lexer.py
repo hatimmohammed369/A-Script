@@ -63,14 +63,10 @@ class Lexer:
         self.checked_indent_in_current_line = False
 
         self.lines: Dict[int, Line] = {}
-        old_idx, idx, ln = 0, 0, 0
-        while idx != len(self.text):
-            if self.text[idx] == "\n":
-                self.lines[ln] = Line(value = self.text[old_idx : idx + 1], begin = old_idx, end = idx + 1)
-                ln += 1
-                old_idx = idx + 1
-            idx += 1
-        del old_idx, idx, ln
+        ln = 0
+        for line_match in re.finditer(pattern = r".*\n", string = self.text):
+            self.lines[ln] = Line(value = line_match.group(), begin = line_match.start(), end = line_match.end())
+            ln += 1
 
         self.current_line_obj = self.lines.get(0, None)
 
