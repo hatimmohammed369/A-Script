@@ -93,7 +93,7 @@ ALL BLOCK STATEMENTS MUST HAVE (end "something") to denote their end
 <#####################################################################################################>
 
 FUNCTIONS:
-function function_name(parameters_list): return_type
+function function_name(parameters_list) => return_type [: or ;]
     body
 end "anything you like here"
 
@@ -122,7 +122,7 @@ end "anything"
 <#####################################################################################################>
 
 FOR STATEMENT:
-for name in array_variable
+for name in iterator_variable
     body
 end "jfskjsgknkdngln"
 

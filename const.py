@@ -109,7 +109,7 @@ OPERATORS = (
     "<<=",
 )
 
-SEPARATORS = ("{", "}", "[", "]", "(", ")", ",", ":", ";")
+SEPARATORS = ("{", "}", "[", "]", "(", ")", ",", ":", ";", "=>")
 
 INT_PATTERN = re.compile(
     r"[+-]{0,1}[0-9]+([eE][+-]{0,1}[0-9]+){0,1}(?![.]([0-9]*[eE][+-]{0,1}[0-9]+|[0-9]+([eE][-+]{0,1}[0-9]+){0,1}))"
@@ -170,7 +170,9 @@ OPERATOR_PATTERN = re.compile(
 )
 
 SEPARATOR_PATTERN = re.compile(
-    r";"
+    r"=>" # Function Return Type
+    + "|"
+    + r";"
     + "|"
     + r":"
     + "|"

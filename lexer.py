@@ -197,6 +197,10 @@ class Lexer:
             tok.end_col = tok.begin_col + len(tok.value)
             if tok.value in KEYWORDS:
                 tok.name = "KEYWORD"
+                if tok.name in BLOCK_STATEMENTS:
+                    tok.name += "::BLOCK_KEYWORD"
+                elif tok.name in PRIMITIVE_DATA_TYPES:
+                    tok.name += "::DATA_TYPE"
             else:
                 tok.name = "NAME"
         # END NAME/KEYWORD
@@ -204,6 +208,7 @@ class Lexer:
         # NUMBER
         elif number_match := NUMBER_PATTERN.match(string = current_line, pos = self.col):
             tok = Token(
+                name      = "NUMBER",
                 value     = number_match.group(),
                 begin_idx = self.idx,
                 begin_col = self.col,
@@ -213,10 +218,9 @@ class Lexer:
             tok.end_idx = tok.begin_idx + len(tok.value)
             tok.end_col = tok.begin_col + len(tok.value)
             if INT_PATTERN.match(tok.value):
-                tok.name = "INT::"
+                tok.name += "::INT"
             else:
-                tok.name = "FLOAT::"
-            tok.name += "NUMBER"
+                tok.name += "::FLOAT"
         # END NUMBER
 
         # OPERATORS
@@ -231,6 +235,14 @@ class Lexer:
             )
             tok.end_idx = tok.begin_idx + len(tok.value)
             tok.end_col = tok.begin_col + len(tok.value)
+            if tok.name == ".":
+                tok.name += "::MEMBERSHIP_ACCESS"
+            elif tok.name in ("+", "-", "*", "/", "~", "&", "|", "^", ">>", "<<"):
+                tok.name += "::ARITHMETIC"
+            elif tok.name in ("==", "!=", "<", "<=", ">", ">=", "not", "and", "or"):
+                tok.name += "::LOGICAL"
+            elif tok.name in (":=", "=", "+=", "-=", "*=", "/=", "~=", "&=", "|=", "^=", ">>=", "<<="):
+                tok.name += "::ASSIGNMENT"
         # END OPERATOR
 
         # SEPARATORS
