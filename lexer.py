@@ -283,7 +283,7 @@ class Lexer:
 
         # CHARACTERS
         elif current_char == "'":
-            weak_match = re.compile(pattern = r"['].*(?<!\\)[']").match(string = current_line, pos = self.col)
+            weak_match = re.compile(pattern = r"['].*?(?<!\\)[']").match(string = current_line, pos = self.col)
             first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).start()
             if weak_match:
                 if char_match := CHAR_PATTERN.match(string = weak_match.group()):
