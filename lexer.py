@@ -9,7 +9,7 @@ from sys import stderr
 
 ####################################################################################################
 
-# Tokenizer: takes texts and turns it into "words" (tokens)
+# Tokenizer (aka Lexer): takes texts and turns it into "words" (tokens)
 
 
 @dataclass(init=True, repr=True)
@@ -56,6 +56,8 @@ class Lexer:
 
         self.indents_stack: List[int] = []  # how many indents currently
         self.indents_tokens_stack: List[Token] = [] # stores all INDENT/OUTDENT tokens
+
+        # True after checking indentation in current line, False only before checking indentation
         self.checked_indent_in_current_line = False
 
         # if self.source does not end with (\n), then add (\n)
@@ -109,14 +111,16 @@ class Lexer:
             captured_indent = re.match(pattern = r"[ \t]*", string = current_line).group()
 
             # Empty lines, "\n", can not introduce INDENT tokens because INDENT tokens objects have actual text in their (value) attribute
-            # But empty lines can introduce OUTDENT tokens, but syntactically OUTDENT is generated use (end) statement
+            # But empty lines can introduce OUTDENT tokens, but syntactically OUTDENT is generated using (end) statement
             # So empty lines MUST not be checked for indentation because they generate no tokens at all
-            # A line only made up of white-spaces is skipped and the code jumps line break (\n) of this white-spaces line
+            # A line only made up of white-spaces is skipped and the code jumps to line break (\n) of this white-spaces line
 
             # first_non_white_space will never be None because empty/white-spaces lines are not checked for indentation
             # so it's always guaranteed we have at least one non-white-space in current line
             first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).group()
             if first_non_white_space not in ("#", ")", "}", "]"):
+                # When first non white space is one of #,),},] then multi-lining is ON
+                # Except for # because comments don't affect code semantics they can be placed anywhere
                 current_indent = 0 if not self.indents_stack else self.indents_stack[-1]
                 if len(captured_indent) != current_indent:
                     # Generate token ONLY WHEN there's change in indentation
@@ -128,10 +132,17 @@ class Lexer:
                         end_ln    = self.ln
                     )
                     if len(captured_indent) < current_indent:
+                        #  for
+                        #      write
+                        #  end
+                        # ^
                         # OUTDENT
                         tok.name = "OUTDENT"
                         self.indents_stack.pop(-1)
                     elif current_indent < len(captured_indent):
+                        # for
+                        #     write
+                        # ^^^^
                         # INDENT
                         tok.name = "INDENT"
                         self.indents_stack.append(len(tok.value))
