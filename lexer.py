@@ -384,16 +384,22 @@ class Lexer:
                 ):
                     # SO THIS CONDITION IS TRUE WHEN:
                     #    - No tokens available
-                    #    - Last generate token IS NOT MULTI_LINED_COMMENT/MULTI_LINED_STRING
+                    #    - Last generated token IS NOT MULTI_LINED_COMMENT/MULTI_LINED_STRING
                     self.col = 0
                     # If multi-lining is ON, assume we checked for indentation
                     # because there's no indentation when multi-lining
                     self.checked_indent_in_current_line = bool(self.left_parenthesis_stack)
                 else:
-                    # Last generated token is either MULTI_LINED_COMMENT/MULTI_LINED_STRING
-                    # So we need to make an unusual jump
-                    # Jump to line when this MULTI_LINED token end one column after its end_col (in other word, end_col+1)
-                    # self.idx is increased in the unusual way, self.idx += len(tok.value)
+                    # Last generated token is MULTI_LINED_COMMENT/MULTI_LINED_STRING
+                    # this means will start tokenization process from the middle of the line in which
+                    # this (Last generated token MULTI_LINED_COMMENT/MULTI_LINED_STRING) ends
+                    # and since indentation can not occur in the middle, we assume we check indentation
+                    # 1 write("
+                    # 2    STRING
+                    # 3 ")
+                    #    ^
+                    # We start from ^, as you can see line head belongs to that MULTI_LINED_STRING, and so there's no indentation
+                    # we just assume we checked indentation
                     self.checked_indent_in_current_line = True
                 current_position_is_indentation = not self.checked_indent_in_current_line # True when at line head, False otherwise
                 while True: # Generate all tokens in current line
@@ -407,7 +413,7 @@ class Lexer:
                         # WHITE-SPACES LINE
                         self.advance(steps = len(line_value.removesuffix("\n"))) # exclude \n
                         # We need to reach this line's (\n), not overcome it
-                        # so advance the last item in this line, which is \n
+                        # so advance to last item in this line, which is \n
                     else:
                         if (
                             # Current char is a useless white-space AND
@@ -442,11 +448,12 @@ class Lexer:
                                 if tok:
                                     self.tokens.append(tok)
                                     if tok.value == "\n" or tok.name.startswith("MULTI_LINED"):
-                                        # We found (\n) which means we reach current line end OR
-                                        # We found a MULTI_LINED token, and so remaining characters in this line belong to this
+                                        # 1 - We found (\n) which means we reached current line end OR
+                                        # 2 - We found a MULTI_LINED token, and so remaining characters in this line belong to this
                                         # MULTI_LINED token we just found
-                                        # So there's no more work to be done in this line, we need to jump to
-                                        # line where this MULTI_LINED token ends
+                                        # - In either case, no more work to be done in current line
+                                        # In case 1, jump to next line
+                                        # In case 2, jump to the line where this (MULTI_LINED token we just found) ends
                                         break
                 # end "while True" generate all tokens in current line
 
@@ -457,6 +464,26 @@ class Lexer:
                     # We reached the end of current line
                     self.ln += 1
                 else:
+                    # 1 write("
+                    #         +
+                    # 2    STRING
+                    # 3 ")
+                    #    ^
+                    # We jump from + to ^
+                    # Next token will be )
+
+                    # 1 ##
+                    #   +
+                    # 2 ANNOYING
+                    # 3 MULTI
+                    # 4 LINED
+                    # 5 COMMENT
+                    # 6
+                    # 7 ##\n
+                    #     ^^
+                    # We jump from + to ^^
+                    # Next token is (\n)
+
                     # We found a MULTI_LINED token, we need an abnormal jump
                     self.idx = tok.end_idx # the first character after this MULTI_LINED token
                     self.col = tok.end_col + 1 # the first character after this MULTI_LINED token in end line of this MULTI_LINED
@@ -467,6 +494,9 @@ class Lexer:
 
             left_open_parenthesis = False
             if self.left_parenthesis_stack:
+                # Un-close left parentheses
+                # print(
+                #      ^
                 last_left = self.left_parenthesis_stack[-1]
                 error_line = self.lines[last_left.begin_ln].value
                 first_non_white_space = re.search(pattern = r"[^\s]", string = error_line).start()
@@ -488,6 +518,15 @@ class Lexer:
                     error += "\n"
                     error += "<===========================================================================>\n"
                     error += "\n"
+                # Missing (end) statement
+                # for
+                #     write(x)
+
+                # Do this:
+                # for
+                #     write(x)
+                # end
+                # +++
                 error += f"Indentation Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
                 error += " " * 4 + "Expected (end) statement\n\n"
                 error += f"HELP: Add (end) after line {self.ln + 1} like below:\n\n"
