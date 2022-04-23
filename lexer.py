@@ -363,6 +363,10 @@ class Lexer:
                     # using self.advance when encountering MULTI_LINED_STRING/MULTI_LINED_COMMENT is dangerous
                     # since self.col becomes invalid after call to self.advance
                     self.advance(steps)
+        else:
+            # There is error, invalidate token
+            # no need to return incomplete data
+            tok = None
 
         return error, tok
 
