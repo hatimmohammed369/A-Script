@@ -228,10 +228,10 @@ class Lexer:
             )
             tok.end_idx = tok.begin_idx + len(tok.value)
             tok.end_col = tok.begin_col + len(tok.value)
-            if INT_PATTERN.match(tok.value):
-                tok.name += "::INT"
-            else:
+            if FLOAT_PATTERN.match(tok.value):
                 tok.name += "::FLOAT"
+            else:
+                tok.name += "::INT"
         # END NUMBER
 
         # OPERATORS
