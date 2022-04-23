@@ -372,8 +372,11 @@ class Lexer:
         error = ""
         if not self.done:
             while True: # Iterate lines
-                self.current_line_obj = self.lines.get(self.ln, None)
+                self.current_line_obj = self.lines.get(self.ln, None) # Attempt getting line with index self.ln, None means failure
+                # if self.current_line_obj is Noen => No line with self.ln => We moved past last line (line with index self.ln - 1)
                 if not self.current_line_obj:
+                    # No next line, we reached last line
+                    # Restore last line and stop, End of File
                     self.ln -= 1
                     self.current_line_obj = self.lines[self.ln]
                     break
