@@ -40,6 +40,18 @@ array   =>  static size single-type-data containers, they hold multiple values o
 
 <#####################################################################################################>
 
+Integers
+
+Decimal: -12, +9999, 0123, 0_12_333_44
+
+Binary: -0b1111, +0b11010101, -ob1_111_111
+
+Octal: 0o137, 0o77_00
+
+Hexadecimal: 0x123fff, oxfff_fff
+
+<#####################################################################################################>
+
 Variables and Constants:
 define variable_name: type [ := value [ ; ] ]
 define const_name: type [ := value [ ; ] ]
@@ -60,7 +72,7 @@ define right: const bool = true;
 define go: mut bool = false
 
 And as usual, this is how you index arrays:
-define x: const [string;4] = ['false', 'False', 'True', 'true']
+define x: const array(string,4) = ['false', 'False', 'True', 'true']
 x[0] is 'false'
 x[1] is 'False'
 And so on

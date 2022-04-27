@@ -217,21 +217,122 @@ class Lexer:
         # END NAME/KEYWORD
 
         # NUMBER
-        elif number_match := NUMBER_PATTERN.match(string = current_line, pos = self.col):
+        # BINARY / OCTAL / HEXADECIMAL
+        elif re.match(pattern = r"[.0-9a-fA-F]", string = current_char): # We found a numeric character
             tok = Token(
                 name      = "NUMBER",
-                value     = number_match.group(),
                 begin_idx = self.idx,
                 begin_col = self.col,
                 begin_ln  = self.ln,
                 end_ln    = self.ln
             )
-            tok.end_idx = tok.begin_idx + len(tok.value)
-            tok.end_col = tok.begin_col + len(tok.value)
-            if FLOAT_PATTERN.match(tok.value):
-                tok.name += "::FLOAT"
+            first_non_white_space = re.search(pattern = r"[^\s]", string = current_line).start() # Used when errors
+
+            # A (possible) (binary/octal/hexadecimal) number match
+            weak_match = re.compile(
+                pattern = r"0(?P<header>[boxBOX])(?P<body>.*)[^_.0-9a-fA-F]"
+            ).match(string = current_line, pos = self.col)
+            if weak_match:
+                weak_match_str = weak_match.group()[:-1]
+                if BINARY_NUMBER_PATTERN.fullmatch(weak_match_str):
+                    tok.name += "::BINARY"
+                    tok.value = weak_match_str
+                else:
+                    if weak_match["header"].lower() == "b":
+                        if weak_match["body"]:
+                            error += f"Syntax Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
+                            error += " " * 4 + "Invalid binary number\n"
+                            error += f"{self.ln + 1} | " + current_line.strip() + "\n"
+                            error += " " * len(f"{self.ln + 1} | ")
+                            for c in weak_match_str:
+                                if re.match(pattern = "[^_bB01]", string = c): # Mark every non-binary digit with ^ beneath
+                                    error += "^"
+                                else:
+                                    error += " "
+                            if weak_match_str.endswith("_"):
+                                error += "^"
+                            error += "\n"
+                            error += "Remove characters marked with ^"
+                        else:
+                            # un-terminated binary
+                            error += f"Syntax Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
+                            error += " " * 4 + "Un-terminated binary number\n"
+                            error += f"{self.ln + 1} | " + current_line.strip() + "\n"
+                            error += " " * len(f"{self.ln + 1} | ") + " " * (self.col - first_non_white_space) + "^^"
+
+                if not error and tok.name == "NUMBER":
+                    if OCTAL_NUMBER_PATTERN.fullmatch(weak_match_str):
+                        tok.name += "::OCTAL"
+                        tok.value = weak_match_str
+                    else:
+                        if weak_match["header"].lower() == "o":
+                            if weak_match["body"]:
+                                error += f"Syntax Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
+                                error += " " * 4 + "Invalid octal number\n"
+                                error += f"{self.ln + 1} | " + current_line.strip() + "\n"
+                                error += " " * len(f"{self.ln + 1} | ")
+                                for c in weak_match_str:
+                                    if re.match(pattern = "[^_oO0-7]", string = c): # Mark every non-octal digit with ^ beneath
+                                        error += "^"
+                                    else:
+                                        error += " "
+                                if weak_match_str.endswith("_"):
+                                    error += "^"
+                                error += "\n"
+                                error += "Remove characters marked with ^"
+                            else:
+                                # un-terminated binary
+                                error += f"Syntax Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
+                                error += " " * 4 + "Un-terminated octal number\n"
+                                error += f"{self.ln + 1} | " + current_line.strip() + "\n"
+                                error += " " * len(f"{self.ln + 1} | ") + " " * (self.col - first_non_white_space) + "^^"
+
+                if not error and tok.name == "NUMBER":
+                    if HEX_NUMBER_PATTERN.fullmatch(weak_match_str):
+                        tok.name += "::HEXADECIMAL"
+                        tok.value = weak_match_str
+                    else:
+                        if weak_match["header"].lower() == "x":
+                            if weak_match["body"]:
+                                error += f"Syntax Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
+                                error += " " * 4 + "Invalid hexadecimal number\n"
+                                error += f"{self.ln + 1} | " + current_line.strip() + "\n"
+                                error += " " * len(f"{self.ln + 1} | ")
+                                for c in weak_match_str:
+                                    if re.match(pattern = "[^_xX0-9a-fA-F]", string = c): # Mark every non-hexadecimal digit with ^ beneath
+                                        error += "^"
+                                    else:
+                                        error += " "
+                                if weak_match_str.endswith("_"):
+                                    error += "^"
+                                error += "\n"
+                                error += "Remove characters marked with ^"
+                            else:
+                                # un-terminated binary
+                                error += f"Syntax Error in \"{self.file}\", line {self.ln + 1}, column {self.col + 1}:\n"
+                                error += " " * 4 + "Un-terminated hexadecimal number\n"
+                                error += f"{self.ln + 1} | " + current_line.strip() + "\n"
+                                error += " " * len(f"{self.ln + 1} | ") + " " * (self.col - first_non_white_space) + "^^"
+
             else:
-                tok.name += "::INT"
+                # DECIMAL (INTEGER/FLOAT)
+                if float_match := FLOAT_PATTERN.match(string = current_line, pos = self.col):
+                    tok.name += "::FLOAT"
+                    tok.value = float_match.group()
+                elif int_match := INT_PATTERN.match(string = current_line, pos = self.col):
+                    tok.name += "::INT"
+                    tok.value = int_match.group()
+                else:
+                    if current_char == ".":
+                        # We found something like: .e+12 / .e123 / .E1900
+                        # all of which don't qualify as valid numeric literals
+                        # Assume it's the dot operator
+                        tok.name = "OPERATOR::MEMBERSHIP_ACCESS"
+                        tok.value = "."
+            if not error: # Successfully match a number
+                # Complete token data initialization
+                tok.end_idx = tok.begin_idx + len(tok.value)
+                tok.end_col = tok.begin_col + len(tok.value)
         # END NUMBER
 
         # OPERATORS

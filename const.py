@@ -112,13 +112,44 @@ OPERATORS = (
 
 SEPARATORS = ("{", "}", "[", "]", "(", ")", ",", ":", ";", "=>")
 
-INT_PATTERN = re.compile(
-    r"[+-]{0,1}[0-9]+([eE][+-]{0,1}[0-9]+){0,1}(?![.]([0-9]*[eE][+-]{0,1}[0-9]+|[0-9]+([eE][-+]{0,1}[0-9]+){0,1}))"
-)  # Match integer ONLY IF it's NOT before a fractional part (e.g, .2384)
-# This ensure INT_PATTERN matches ONLY integers
+BINARY_NUMBER_PATTERN = re.compile(r"0[bB]([_]{0,1}[01]+)+")
+
+OCTAL_NUMBER_PATTERN = re.compile(r"0[oO]([_]{0,1}[0-7]+)+")
+
+HEX_NUMBER_PATTERN = re.compile(r"0[xX]([_]{0,1}[0-9a-fA-F]+)+")
+
+INT_PATTERN = re.compile(r"\d+([_]\d+)*")
 
 FLOAT_PATTERN = re.compile(
-    r"[+-]{0,1}[0-9]+[.][0-9]*([eE][+-]{0,1}[0-9]+){0,1}|[+-]{0,1}[0-9]*[.][0-9]+([eE][+-]{0,1}[0-9]+){0,1}"
+    # Integer part with optional fractional part
+    r"("
+
+        r"\d+([_]\d+)*" # Integer part
+
+        r"("
+
+            r"[.](\d+([_]\d+)*){0,1}" # Fractional part with optional digits after the decimal point (e.g, .1234, or just ., like in 4.)
+
+            r"|" # OR
+
+            r"[Ee][+-]{0,1}\d+([_]\d+)*" # Exponent part (e-3, E+12)
+
+            r"|" # OR BOTH
+
+            r"[.](\d+([_]\d+)*){0,1}[Ee][+-]{0,1}\d+([_]\d+)*"
+
+        r")"
+
+    r")"
+
+    r"|"
+
+    # No integer part and a fractional part
+    r"("
+
+        r"[.]\d+([_]\d+)*([Ee][+-]{0,1}\d+([_]\d+)*){0,1}"
+
+    r")"
 )
 
 NUMBER_PATTERN = re.compile(FLOAT_PATTERN.pattern + "|" + INT_PATTERN.pattern)
