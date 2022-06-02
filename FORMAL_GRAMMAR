@@ -8,7 +8,7 @@ KEYWORDS: 'define' | 'mut' | 'const' | 'int' | 'float' | 'string' | 'char' | 'bo
     'array' | 'ref_of' | 'function' | 'return' | 'if' | 'else' | 'else_if' | 'for' | 'while' | 'break' | 'continue' | 'pass' |
     'import' | 'from'
 
-STATEMENT: ( SIMPLE_STATEMENT | COMPOUND_STATEMENT ) [ [';'] LINE_BREAK | ';' ]
+STATEMENT: ( ( SIMPLE_STATEMENT ) ';' [ LINE_BREAK ] ) | COMPOUND_STATEMENT
 
 SIMPLE_STATEMENT: 'pass' | 'break' | 'continue' | RETURN_STATEMENT | OPERATOR_EXPRESSION |
                 STRUCT_EXPRESSION | STRUCT_MEMBERSHIP_ACCESS | IMPORT_STATEMENT

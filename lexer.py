@@ -692,7 +692,7 @@ if __name__ == "__main__":
         source = args.source
         file = "<stdin>"
     else:
-        print("You must supply either --file or --source, not both", file = stderr)
+        print("You must supply either --file or --source", file = stderr)
         exit(1)
 
     tokenizer = Lexer(
